@@ -366,17 +366,22 @@ def rtbh_event_durations(cache_files):
                                 last_A[peer_ip][prefix] = timestamp
                             else:
                                 if prefix in last_A[peer_ip]:
+                                    start_time = last_A[peer_ip][prefix]
+                                    event_duration = timestamp - start_time
+                                    if event_duration > 0:
+                                        rtbh_event_durations[peer_ip][prefix].append(event_duration)
                                     del last_A[peer_ip][prefix]
 
-                    elif entry.type == 'W' and prefix in last_A[peer_ip]:
+                    elif entry.type == 'W':
+                        if prefix in last_A[peer_ip]:
 
-                        event_duration = timestamp - last_A[peer_ip][prefix]
+                            event_duration = timestamp - last_A[peer_ip][prefix]
 
-                        if event_duration > 0:
-                            rtbh_event_durations[peer_ip][prefix].append(event_duration)
+                            if event_duration > 0:
+                                rtbh_event_durations[peer_ip][prefix].append(event_duration)
 
-                        # withdraw last announcement
-                        del last_A[peer_ip][prefix]
+                            # withdraw last announcement
+                            del last_A[peer_ip][prefix]
     
     # filter out the empty entries
     for p_ip in list(rtbh_event_durations.keys()):
