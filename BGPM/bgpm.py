@@ -352,7 +352,7 @@ def rtbh_event_durations(cache_files):
 
                         if 'communities' in entry.fields and entry.fields['communities']:
                             communities = entry.fields['communities']
-                            has_rtbh = any('666' in c for c in communities) # looks like :666 suffix for rtbh?
+                            has_rtbh = any('666' in str(c) for c in communities) # looks like :666 suffix for rtbh?
 
                             if has_rtbh:
                                 last_A[peer_ip][prefix] = timestamp
