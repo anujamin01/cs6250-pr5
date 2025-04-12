@@ -239,18 +239,57 @@ def aw_event_durations(cache_files):
 
         For example: {"127.0.0.1": {"12.13.14.0/24": [4.0, 1.0, 3.0]}}
         corresponds to the peerIP "127.0.0.1", the prefix "12.13.14.0/24" and event durations of 4.0, 1.0 and 3.0.
+        1. look for pair of last A, first W 
     """
     # the required return type is 'dict' - you are welcome to define additional data structures, if needed
     aw_event_durations = {}
 
+    last_A = defaultdict(dict) # key = Announcement, value = first withdrawl
     for ndx, fpath in enumerate(cache_files):
         stream = pybgpstream.BGPStream(data_interface="singlefile")
         stream.set_data_interface_option("singlefile", "upd-file", fpath)
 
         # implement your solution here
+        # process each record
+        for record in stream:
+            timestamp = record.time
+            for entry in record:
+
+                # get metadata like peer ip and prefix
+                prefix = entry.fields['prefix']
+                peer_ip = entry.peer_address
+
+                if peer_ip not in last_A:
+                    last_A[peer_ip] = {}
+                if peer_ip not in aw_event_durations:
+                    aw_event_durations[peer_ip] = {}
+                if prefix not in aw_event_durations[peer_ip]:
+                    aw_event_durations[peer_ip][prefix] = []
+
+
+                # map the announcement and withdrawl times
+                if entry.type == 'A':
+                    last_A[peer_ip][prefix] = timestamp 
+                
+                elif entry.type == 'W':
+                    event_duration = timestamp - last_A[peer_ip][prefix]
+
+                    if event_duration > 0:
+                        aw_event_durations[peer_ip][prefix].append(event_duration)
+
+                    # withdraw announcement
+                    del last_A[peer_ip][prefix]
+    
+    # filter out the empty entries
+    for p_ip in list(aw_event_durations.keys()):
+        aw_event_durations[p_ip] = {
+            prefix:event_duration for prefix, event_duration in aw_event_durations[p_ip].items() if event_duration
+        }
+
+        if not aw_event_durations[p_ip]:
+            del aw_event_durations[p_ip]
 
     return aw_event_durations
-
 
 # Task 4: RTBH Event Durations
 def rtbh_event_durations(cache_files):
@@ -271,12 +310,63 @@ def rtbh_event_durations(cache_files):
         corresponds to the peerIP "127.0.0.1", the prefix "12.13.14.0/24" and event durations of 4.0, 1.0 and 3.0.
     """
     # the required return type is 'dict' - you are welcome to define additional data structures, if needed
-    rtbh_event_durations = {}
-
+    rtbh_event_durations = {} # key: peer IP, value: list of RTBH event duration
+    last_A = {} # keep track of the most recent annoucement for each pair
     for fpath in cache_files:
         stream = pybgpstream.BGPStream(data_interface="singlefile")
         stream.set_data_interface_option("singlefile", "upd-file", fpath)
 
-        # implement your solution here
+        # implement your solution here 
+        # process each record
+        for record in stream:
+            timestamp = record.time
+            for entry in record:
+
+                # get metadata like peer ip and prefix
+                prefix = entry.fields['prefix']
+                peer_ip = entry.peer_address
+
+                if peer_ip not in last_A:
+                    last_A[peer_ip] = {}
+                if peer_ip not in rtbh_event_durations:
+                    rtbh_event_durations[peer_ip] = {}
+                if prefix not in rtbh_event_durations[peer_ip]:
+                    rtbh_event_durations[peer_ip][prefix] = []
+
+
+                # map the announcement and withdrawl times
+                if entry.type == 'A':
+                    has_rtbh = False
+
+                    if 'communities' in entry.fields and entry.fields['communitites']:
+                        communities = entry.fields['communities'].split()
+                        has_rtbh = any('666' in c for c in communities) # looks like :666 suffix for rtbh?
+
+                        if has_rtbh:
+                            last_A[peer_ip][prefix] = timestamp
+                        else:
+                            if prefix in last_A[peer_ip]:
+                                del last_A[peer_ip][prefix]
+
+                elif entry.type == 'W':
+
+                    if prefix in last_A[peer_ip]:
+
+                        event_duration = timestamp - last_A[peer_ip][prefix]
+
+                        if event_duration > 0:
+                            rtbh_event_durations[peer_ip][prefix].append(event_duration)
+
+                        # withdraw last announcement
+                        del last_A[peer_ip][prefix]
+    
+    # filter out the empty entries
+    for p_ip in list(rtbh_event_durations.keys()):
+        rtbh_event_durations[p_ip] = {
+            prefix:event_durations for prefix, event_durations in rtbh_event_durations[p_ip].items() if event_durations
+        }
+
+        if not rtbh_event_durations[p_ip]:
+            del rtbh_event_durations[p_ip]
 
     return rtbh_event_durations
