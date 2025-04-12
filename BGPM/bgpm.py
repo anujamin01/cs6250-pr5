@@ -135,7 +135,7 @@ def top_10_ases_by_prefix_growth(cache_files):
     for origin, cnts in mp_snapshot.items():
         # find non 0 indices
         idxs = [i for i, cnt in enumerate(cnts) if cnt > 0]
-        if len(idxs) > 0:
+        if len(idxs) >= 1:
             idx_0 = min(idxs)
             idx_n = max(idxs)
 
@@ -148,7 +148,7 @@ def top_10_ases_by_prefix_growth(cache_files):
                     growth[origin] = percentage
 
     # sort top 10
-    top = sorted(mp_snapshot.items(), key=lambda x:x[1])[:10]
+    top = sorted(growth.items(), key=lambda x:x[1])[:10]
     top_10_ases_by_prefix_growth = [n for n,_ in top]
     return top_10_ases_by_prefix_growth
 
@@ -196,7 +196,7 @@ def shortest_path_by_origin_by_snapshot(cache_files):
         # keep track of min paths key: AS, value: min path len
         min_paths = defaultdict(int)
         # parse records
-        for record in stream:
+        for record in stream.records():
             for entry in record:
                 if 'as-path' in entry.fields and entry.fields['as-path']:
                     ass_path = entry.fields['as-path']
@@ -209,8 +209,7 @@ def shortest_path_by_origin_by_snapshot(cache_files):
                     # count unique AS in path
                     unique_ass = set()
                     for a in ass_path_arr:
-                        if a not in unique_ass:
-                            unique_ass.add(a)
+                        unique_ass.add(a)
                     
                     # update path length
                     if len(unique_ass) <= 1:
@@ -220,12 +219,15 @@ def shortest_path_by_origin_by_snapshot(cache_files):
         # update the snapshot
         for origin, length in min_paths.items():
             if origin not in shortest_path_by_origin_by_snapshot:
-                shortest_path_by_origin_by_snapshot[origin] = [0] * length
+                shortest_path_by_origin_by_snapshot[origin] = [0] * len(cache_files)
+            
+            if len(shortest_path_by_origin_by_snapshot[origin]) <= ndx:
+                shortest_path_by_origin_by_snapshot[origin].extend([0] * (ndx+1-len(shortest_path_by_origin_by_snapshot[origin])))
             shortest_path_by_origin_by_snapshot[origin][ndx] = length
-    
-    origin_set = set(shortest_path_by_origin_by_snapshot.keys())
+
+
     # final update
-    for o in origin_set:
+    for o in shortest_path_by_origin_by_snapshot:
         if len(shortest_path_by_origin_by_snapshot[o]) < len(cache_files):
             shortest_path_by_origin_by_snapshot[o].extend([0]* len(cache_files) - len(shortest_path_by_origin_by_snapshot[o]))
     return shortest_path_by_origin_by_snapshot
