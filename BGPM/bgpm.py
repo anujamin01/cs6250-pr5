@@ -229,7 +229,7 @@ def shortest_path_by_origin_by_snapshot(cache_files):
     # final update
     for o in shortest_path_by_origin_by_snapshot:
         if len(shortest_path_by_origin_by_snapshot[o]) < len(cache_files):
-            shortest_path_by_origin_by_snapshot[o].extend([0]* len(cache_files) - len(shortest_path_by_origin_by_snapshot[o]))
+            shortest_path_by_origin_by_snapshot[o].extend([0]* (len(cache_files) - len(shortest_path_by_origin_by_snapshot[o])))
     return shortest_path_by_origin_by_snapshot
 
 
@@ -260,34 +260,36 @@ def aw_event_durations(cache_files):
 
         # implement your solution here
         # process each record
-        for record in stream:
+        for record in stream.records():
             timestamp = record.time
             for entry in record:
 
                 # get metadata like peer ip and prefix
-                prefix = entry.fields['prefix']
-                peer_ip = entry.peer_address
+                if 'prefix' in entry.fields and entry.fields['prefix']:
+                    prefix = entry.fields['prefix']
+                    peer_ip = entry.peer_address
 
-                if peer_ip not in last_A:
-                    last_A[peer_ip] = {}
-                if peer_ip not in aw_event_durations:
-                    aw_event_durations[peer_ip] = {}
-                if prefix not in aw_event_durations[peer_ip]:
-                    aw_event_durations[peer_ip][prefix] = []
+                    if peer_ip not in last_A:
+                        last_A[peer_ip] = {}
+                    if peer_ip not in aw_event_durations:
+                        aw_event_durations[peer_ip] = {}
+                    if prefix not in aw_event_durations[peer_ip]:
+                        aw_event_durations[peer_ip][prefix] = []
 
 
-                # map the announcement and withdrawl times
-                if entry.type == 'A':
-                    last_A[peer_ip][prefix] = timestamp 
-                
-                elif entry.type == 'W':
-                    event_duration = timestamp - last_A[peer_ip][prefix]
+                    # map the announcement and withdrawl times
+                    if entry.type == 'A':
+                        last_A[peer_ip][prefix] = timestamp 
+                    
+                    elif entry.type == 'W':
+                        if prefix in last_A[peer_ip]:
+                            event_duration = timestamp - last_A[peer_ip][prefix]
 
-                    if event_duration > 0:
-                        aw_event_durations[peer_ip][prefix].append(event_duration)
+                            if event_duration > 0:
+                                aw_event_durations[peer_ip][prefix].append(event_duration)
 
-                    # withdraw announcement
-                    del last_A[peer_ip][prefix]
+                            # withdraw announcement
+                            del last_A[peer_ip][prefix]
     
     # filter out the empty entries
     for p_ip in list(aw_event_durations.keys()):
@@ -327,7 +329,7 @@ def rtbh_event_durations(cache_files):
 
         # implement your solution here 
         # process each record
-        for record in stream:
+        for record in stream.records():
             timestamp = record.time
             for entry in record:
 
@@ -347,7 +349,7 @@ def rtbh_event_durations(cache_files):
                 if entry.type == 'A':
                     has_rtbh = False
 
-                    if 'communities' in entry.fields and entry.fields['communitites']:
+                    if 'communities' in entry.fields and entry.fields['communities']:
                         communities = entry.fields['communities'].split()
                         has_rtbh = any('666' in c for c in communities) # looks like :666 suffix for rtbh?
 
