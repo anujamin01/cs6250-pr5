@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import pybgpstream
-
+from collections import defaultdict
 """
 CS 6250 BGP Measurements Project
 
@@ -32,7 +32,15 @@ def unique_prefixes_by_snapshot(cache_files):
         stream.set_data_interface_option("singlefile", "rib-file", fpath)
 
         # implement your solution here
+        unique_prefixes = set()
 
+        # parse the records in the stream
+        for record in stream:
+            for entry in record:
+                prefix = entry.fields['prefix']
+                unique_prefixes.add(prefix)
+        
+        unique_ases_by_snapshot.append(len(unique_prefixes))
     return unique_prefixes_by_snapshot
 
 
@@ -56,7 +64,17 @@ def unique_ases_by_snapshot(cache_files):
         stream.set_data_interface_option("singlefile", "rib-file", fpath)
 
         # implement your solution here
+        unique_asses = set()
 
+        # process each record
+        for record in stream:
+            for entry in record: 
+                if 'as-path' in entry.fields:
+                    as_path = entry.fields['as-path']
+                    # parse the AS path
+                    for part in as_path.split():
+                        unique_asses.add(part)
+        unique_ases_by_snapshot.append(len(unique_asses))
     return unique_ases_by_snapshot
 
 
@@ -78,13 +96,53 @@ def top_10_ases_by_prefix_growth(cache_files):
     """
     # the required return type is 'list' - you are welcome to define additional data structures, if needed
     top_10_ases_by_prefix_growth = []
+    
+    # track prefix/origin globally
+    mp_snapshot = {} 
 
     for ndx, fpath in enumerate(cache_files):
         stream = pybgpstream.BGPStream(data_interface="singlefile")
         stream.set_data_interface_option("singlefile", "rib-file", fpath)
 
         # implement your solution here
+        mp = defaultdict(set) # map the origin AS to the prefix
+        # process each record
+        for record in stream:
+            for entry in record:   
+                if 'as-path' in entry.fields and entry.fields['as-path'] != "":
+                    prefix = entry.fields["prefix"]
+                    ass_path = entry.fields['as-path'].split()
 
+                    origin = ass_path[-1]
+
+                    mp[origin].add(prefix)
+        
+        # fix global tracking
+        for k,v in mp.items():
+            if k not in mp_snapshot:
+                mp_snapshot[k] = [0] * len(cache_files)
+            mp_snapshot[k][ndx] = len(v)
+
+    # calculate growth rates
+    growth = {}
+    for origin, cnts in mp_snapshot.items():
+        # find non 0 indices
+        idxs = [i for i, cnt in enumerate(cnts) if cnt > 0]
+        if len(idxs) > 0:
+            idx_0 = min(idxs)
+            idx_n = max(idxs)
+
+            if idx_0 != idx_n:
+                cnt_1 = cnts[idx_0]
+                cnt_2 = cnts[idx_n]
+
+                if cnt_1 > 0: # avoid division 
+                    percentage = (cnt_2 - cnt_1) / cnt_1
+                    growth[origin] = percentage
+
+    # sort top 10
+    top = sorted(mp_snapshot.items(), key=lambda x:x[1])[:10]
+    top_10_ases_by_prefix_growth = [n for n,_ in top]
     return top_10_ases_by_prefix_growth
 
 
