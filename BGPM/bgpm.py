@@ -35,12 +35,19 @@ def unique_prefixes_by_snapshot(cache_files):
         unique_prefixes = set()
 
         # parse the records in the stream
-        for record in stream:
-            for entry in record:
-                prefix = entry.fields['prefix']
-                unique_prefixes.add(prefix)
-        
-        unique_ases_by_snapshot.append(len(unique_prefixes))
+        for record in stream.records():
+            
+            
+            while True:
+                entry = record.get_next_elem()
+                if entry is None: 
+                    break
+  
+                if 'prefix' in entry.fields:
+                    prefix = entry.fields['prefix']
+                    unique_prefixes.add(prefix)
+                      
+        unique_prefixes_by_snapshot.append(len(unique_prefixes))
     return unique_prefixes_by_snapshot
 
 
@@ -67,7 +74,7 @@ def unique_ases_by_snapshot(cache_files):
         unique_asses = set()
 
         # process each record
-        for record in stream:
+        for record in stream.records():
             for entry in record: 
                 if 'as-path' in entry.fields:
                     as_path = entry.fields['as-path']
@@ -107,7 +114,7 @@ def top_10_ases_by_prefix_growth(cache_files):
         # implement your solution here
         mp = defaultdict(set) # map the origin AS to the prefix
         # process each record
-        for record in stream:
+        for record in stream.records():
             for entry in record:   
                 if 'as-path' in entry.fields and entry.fields['as-path'] != "":
                     prefix = entry.fields["prefix"]
