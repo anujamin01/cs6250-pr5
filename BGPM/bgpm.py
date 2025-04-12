@@ -334,42 +334,43 @@ def rtbh_event_durations(cache_files):
             for entry in record:
 
                 # get metadata like peer ip and prefix
-                prefix = entry.fields['prefix']
-                peer_ip = entry.peer_address
+                if 'prefix' in entry.fields and entry.fields['prefix']:
+                    prefix = entry.fields['prefix']
+                    peer_ip = entry.peer_address
 
-                if peer_ip not in last_A:
-                    last_A[peer_ip] = {}
-                if peer_ip not in rtbh_event_durations:
-                    rtbh_event_durations[peer_ip] = {}
-                if prefix not in rtbh_event_durations[peer_ip]:
-                    rtbh_event_durations[peer_ip][prefix] = []
+                    if peer_ip not in last_A:
+                        last_A[peer_ip] = {}
+                    if peer_ip not in rtbh_event_durations:
+                        rtbh_event_durations[peer_ip] = {}
+                    if prefix not in rtbh_event_durations[peer_ip]:
+                        rtbh_event_durations[peer_ip][prefix] = []
 
 
-                # map the announcement and withdrawl times
-                if entry.type == 'A':
-                    has_rtbh = False
+                    # map the announcement and withdrawl times
+                    if entry.type == 'A':
+                        has_rtbh = False
 
-                    if 'communities' in entry.fields and entry.fields['communities']:
-                        communities = entry.fields['communities'].split()
-                        has_rtbh = any('666' in c for c in communities) # looks like :666 suffix for rtbh?
+                        if 'communities' in entry.fields and entry.fields['communities']:
+                            communities = entry.fields['communities']
+                            has_rtbh = any('666' in c for c in communities) # looks like :666 suffix for rtbh?
 
-                        if has_rtbh:
-                            last_A[peer_ip][prefix] = timestamp
-                        else:
-                            if prefix in last_A[peer_ip]:
-                                del last_A[peer_ip][prefix]
+                            if has_rtbh:
+                                last_A[peer_ip][prefix] = timestamp
+                            else:
+                                if prefix in last_A[peer_ip]:
+                                    del last_A[peer_ip][prefix]
 
-                elif entry.type == 'W':
+                    elif entry.type == 'W':
 
-                    if prefix in last_A[peer_ip]:
+                        if prefix in last_A[peer_ip]:
 
-                        event_duration = timestamp - last_A[peer_ip][prefix]
+                            event_duration = timestamp - last_A[peer_ip][prefix]
 
-                        if event_duration > 0:
-                            rtbh_event_durations[peer_ip][prefix].append(event_duration)
+                            if event_duration > 0:
+                                rtbh_event_durations[peer_ip][prefix].append(event_duration)
 
-                        # withdraw last announcement
-                        del last_A[peer_ip][prefix]
+                            # withdraw last announcement
+                            del last_A[peer_ip][prefix]
     
     # filter out the empty entries
     for p_ip in list(rtbh_event_durations.keys()):
