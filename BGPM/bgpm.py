@@ -171,16 +171,56 @@ def shortest_path_by_origin_by_snapshot(cache_files):
         Given three cache files (also called "snapshots"), the results {"455": [4, 2, 3], "533": [4, 10, 2]}
         mean that AS 455 has a shortest path length of 4 in the first cache file, a shortest path length of 2 in the second
         cache file, and a shortest path of 3 in the third cache file. Similarly, AS 533 has shortest path lengths of 4, 10, and 2.
+
+        TODO: 
+        1. identify all origin ASses
+        2. find all paths where an origin AS is the origin
+        3. calculate path length
+        4. find shortest path length
+        5. filter out paths of length 1
     """
     # the required return type is 'dict' - you are welcome to define additional data structures, if needed
     shortest_path_by_origin_by_snapshot = {}
-
+    # origin_set = set()
     for ndx, fpath in enumerate(cache_files):
         stream = pybgpstream.BGPStream(data_interface="singlefile")
         stream.set_data_interface_option("singlefile", "rib-file", fpath)
 
-        # implement your solution here
+        # keep track of min paths key: AS, value: min path len
+        min_paths = defaultdict(int)
+        # parse records
+        for record in stream:
+            for entry in record:
+                if 'as-path' in entry.fields and entry.fields['as-path']:
+                    ass_path = entry.fields['as-path']
+                    ass_path_arr = ass_path.split()
 
+                    # get origin 
+                    origin = ass_path_arr[-1]
+
+                    # origin_set.add(origin)
+                    # count unique AS in path
+                    unique_ass = set()
+                    for a in ass_path_arr:
+                        if a not in unique_ass:
+                            unique_ass.add(a)
+                    
+                    # update path length
+                    if len(unique_ass) <= 1:
+                        continue
+                    if (origin not in min_paths or len(unique_ass) < min_paths[origin]):
+                        min_paths[origin] = len(unique_ass)
+        # update the snapshot
+        for origin, length in min_paths.items():
+            if origin not in shortest_path_by_origin_by_snapshot:
+                shortest_path_by_origin_by_snapshot[origin] = [0] * length
+            shortest_path_by_origin_by_snapshot[origin][ndx] = length
+    
+    origin_set = set(shortest_path_by_origin_by_snapshot.keys())
+    # final update
+    for o in origin_set:
+        if len(shortest_path_by_origin_by_snapshot[o]) < len(cache_files):
+            shortest_path_by_origin_by_snapshot[o].extend([0]* len(cache_files) - len(shortest_path_by_origin_by_snapshot[o]))
     return shortest_path_by_origin_by_snapshot
 
 
