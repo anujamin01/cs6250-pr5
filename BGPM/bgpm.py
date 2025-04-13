@@ -170,7 +170,7 @@ def top_10_ases_by_prefix_growth(cache_files):
     # sort top 10
     top = sorted(growth.items(), key=lambda x:-x[1])[:10]
     top.reverse()
-    return [n for n,_ in top in top]
+    return [n for n,_ in top]
 
 
 # Task 2: Routing Table Growth: AS-Path Length Evolution Over Time
