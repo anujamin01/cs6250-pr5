@@ -105,52 +105,72 @@ def top_10_ases_by_prefix_growth(cache_files):
     top_10_ases_by_prefix_growth = []
     
     # track prefix/origin globally
-    mp_snapshot = {} 
+    #mp_snapshot = defaultdict(lambda: defaultdict(set))
 
     for ndx, fpath in enumerate(cache_files):
         stream = pybgpstream.BGPStream(data_interface="singlefile")
         stream.set_data_interface_option("singlefile", "rib-file", fpath)
-
+        prefixes = {}
         # implement your solution here
-        mp = defaultdict(set) # map the origin AS to the prefix
+        # mp = defaultdict(set) # map the origin AS to the prefix
         # process each record
         for record in stream.records():
             for entry in record:   
-                if 'as-path' in entry.fields and entry.fields['as-path'] != "":
-                    prefix = entry.fields["prefix"]
+                if 'as-path' in entry.fields and entry.fields['as-path'] and 'prefix' in entry.fields:
                     ass_path = entry.fields['as-path'].split()
+                    if not ass_path:
+                        continue
 
+                    prefix = entry.fields["prefix"]
                     origin = ass_path[-1]
 
-                    mp[origin].add(prefix)
-        
-        # fix global tracking
-        for k,v in mp.items():
-            if k not in mp_snapshot:
-                mp_snapshot[k] = [0] * len(cache_files)
-            mp_snapshot[k][ndx] = len(v)
+                    if origin not in prefixes:
+                        prefixes[origin] = set()
+                    prefixes[origin].add(prefix)
+        top_10_ases_by_prefix_growth.append(prefixes)
 
     # calculate growth rates
     growth = {}
-    for origin, cnts in mp_snapshot.items():
-        # find non 0 indices
-        idxs = [i for i, cnt in enumerate(cnts) if cnt > 0]
-        if len(idxs) >= 1:
-            idx_0 = min(idxs)
-            idx_n = max(idxs)
 
-            if idx_0 != idx_n:
-                cnt_1 = cnts[idx_0]
-                cnt_2 = cnts[idx_n]
+    unique_ass = set()
 
-                if cnt_1 > 0: # avoid division 
-                    percentage = (cnt_2 - cnt_1) / cnt_1
-                    growth[origin] = percentage
+    for elt in top_10_ases_by_prefix_growth:
+        unique_ass.update(elt.keys())
+    
+    # find first and last appearance and calculate growth
+    for origin_as in unique_ass:
+        # find 1st appearance
+        idx_1 = None
+        for i, a in enumerate(top_10_ases_by_prefix_growth):
+            if origin_as in a:
+                idx_1 = i
+                break
+        
+        if idx_1 is None:
+            continue
+
+        # find last
+        idx_2 = None
+        for i in range(len(top_10_ases_by_prefix_growth)-1,-1,-1):
+            if origin_as in top_10_ases_by_prefix_growth[i]:
+                idx_2 = i
+                break
+
+        if idx_2 is None or idx_1 == idx_2:
+            continue
+
+        c_1 = len(top_10_ases_by_prefix_growth[idx_1][origin_as])
+        c_2 = len(top_10_ases_by_prefix_growth[idx_2][origin_as])
+
+        if c_1 > 0:
+            percentage = (c_2 - c_1) / c_1
+            growth[origin_as] = percentage
+
 
     # sort top 10
-    top = sorted(growth.items(), key=lambda x:x[1])[:10]
-    top_10_ases_by_prefix_growth = [n for n,_ in top]
-    return top_10_ases_by_prefix_growth
+    top = sorted(growth.items(), key=lambda x:-x[1])[:10]
+    top.reverse()
+    return [n for n,_ in top in top]
 
 
 # Task 2: Routing Table Growth: AS-Path Length Evolution Over Time
@@ -321,7 +341,7 @@ def rtbh_event_durations(cache_files):
         corresponds to the peerIP "127.0.0.1", the prefix "12.13.14.0/24" and event durations of 4.0, 1.0 and 3.0.
     """
     # the required return type is 'dict' - you are welcome to define additional data structures, if needed
-    rtbh_event_durations = {} # key: peer IP, value: list of RTBH event duration
+    rtbh_event_durations = defaultdict(list) # key: peer IP, value: list of RTBH event duration
     last_A = {} # keep track of the most recent annoucement for each pair
     for fpath in cache_files:
         stream = pybgpstream.BGPStream(data_interface="singlefile")
@@ -329,67 +349,43 @@ def rtbh_event_durations(cache_files):
 
         # implement your solution here 
         # process each record
-        debug_printed = False
         for record in stream.records():
-            timestamp = record.time
             for entry in record:
-                if debug_printed and 'communities' in entry.fields and entry.fields['communities']:
-                    print("DEBUG - Communities example:")
-                    print(f"Type: {type(entry.fields['communities'])}")
-                    print(f"Value: {entry.fields['communities']}")
-                    print(f"Is iterable: {hasattr(entry.fields['communities'], '__iter__')}")
-                    if hasattr(entry.fields['communities'], '__iter__'):
-                        for comm in entry.fields['communities']:
-                            print(f"  Community: {comm}, Type: {type(comm)}")
                 # get metadata like peer ip and prefix
                 if 'prefix' in entry.fields and entry.fields['prefix']:
                     prefix = entry.fields['prefix']
                     peer_ip = entry.peer_address
-
-                    if peer_ip not in last_A:
-                        last_A[peer_ip] = {}
-                    if peer_ip not in rtbh_event_durations:
-                        rtbh_event_durations[peer_ip] = {}
-                    if prefix not in rtbh_event_durations[peer_ip]:
-                        rtbh_event_durations[peer_ip][prefix] = []
-
+                    timestamp = record.time
+                    k = (peer_ip, prefix)
 
                     # map the announcement and withdrawl times
-                    if entry.type == 'A':
-                        has_rtbh = False
-
-                        if 'communities' in entry.fields and entry.fields['communities']:
-                            
-                            has_rtbh = any(c.endswith(':666') for c in entry.fields['communities'])
-
-                            if has_rtbh:
-                                last_A[peer_ip][prefix] = timestamp
-                            else:
-                                if prefix in last_A[peer_ip]:
-                                    start_time = last_A[peer_ip][prefix]
-                                    event_duration = timestamp - start_time
-                                    if event_duration > 0:
-                                        rtbh_event_durations[peer_ip][prefix].append(event_duration)
-                                    del last_A[peer_ip][prefix]
-
-                    elif entry.type == 'W':
-                        if prefix in last_A[peer_ip]:
-
-                            event_duration = timestamp - last_A[peer_ip][prefix]
+                    if entry.type == 'W':
+                        if k in last_A:
+                            start = last_A[k]
+                            event_duration = timestamp - start
 
                             if event_duration > 0:
-                                rtbh_event_durations[peer_ip][prefix].append(event_duration)
+                                rtbh_event_durations[k].append(float(event_duration))
+                            del last_A[k]
 
-                            # withdraw last announcement
-                            del last_A[peer_ip][prefix]
-    
-    # filter out the empty entries
-    for p_ip in list(rtbh_event_durations.keys()):
-        rtbh_event_durations[p_ip] = {
-            prefix:event_durations for prefix, event_durations in rtbh_event_durations[p_ip].items() if event_durations
-        }
+                    elif entry.type == 'A':
 
-        if not rtbh_event_durations[p_ip]:
-            del rtbh_event_durations[p_ip]
+                        # check for rtbh community
+                        communities = entry.fields.get("communities", [])
+                        has_rtbh = any(c.endswith(':666') for c in communities)
 
-    return rtbh_event_durations
+                        # store most recent rtbh
+                        if has_rtbh:
+                            last_A[k]=timestamp
+                        else:
+                            # remove previous rtbh announcement
+                            last_A.pop(k,None)
+    # convert back to dict
+    res = {}
+    for (peer_ip, prefix), durations in rtbh_event_durations.items():
+        if durations:
+            if peer_ip not in res:
+                res[peer_ip] = {}
+            res[peer_ip][prefix] = durations
+
+    return res
